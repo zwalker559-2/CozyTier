@@ -121,29 +121,6 @@ class Registration(commands.Cog):
                 json.dump(tier_roles, f, indent=4)
 
         await interaction.followup.send("Default tier roles created. Use /set-points to assign point values.")
-        cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-        result = cursor.fetchone()
-        if not result or result[0] not in [r.id for r in interaction.user.roles]:
-            await interaction.response.send_message("You don't have permission.", ephemeral=True)
-            return
-
-        # Update DB
-        cursor.execute("UPDATE tier_roles SET points = %s WHERE guild_id = %s AND role_id = %s", (points, interaction.guild.id, role.id))
-        db.commit()
-
-        # Update json
-        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
-        tier_roles_file = f"{server_folder}/tier-roles.json"
-        if os.path.exists(tier_roles_file):
-            with open(tier_roles_file, "r") as f:
-                tier_roles = json.load(f)
-            for tr in tier_roles:
-                if tr["role_id"] == role.id:
-                    tr["points"] = points
-            with open(tier_roles_file, "w") as f:
-                json.dump(tier_roles, f, indent=4)
-
-        await interaction.response.send_message(f"Points for {role.name} set to {points}.")
 
 async def setup(bot):
     await bot.add_cog(Registration(bot))
