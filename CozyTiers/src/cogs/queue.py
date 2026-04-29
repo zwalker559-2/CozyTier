@@ -128,96 +128,106 @@ class Queue(commands.Cog):
                         # Find suitable testers: same tier or one above
                         suitable_testers = []
                         for tester in available_testers:
-                        tester_tier = self.get_tester_tier_points(guild_id, tester)
-                        if tester_tier >= user_tier and tester_tier <= user_tier + 1:  # Same or one above (assuming points increase)
-                            seniority = self.get_tester_seniority(guild_id, tester)
-                            avg_review = self.get_tester_avg_review(guild_id, tester)
-                            score = (tester_tier - user_tier) * 10 + seniority * 2 + avg_review * 5  # Weighted score
-                            suitable_testers.append((tester, score))
-                    
-                    if suitable_testers:
-                        # Sort by score descending
-                        suitable_testers.sort(key=lambda x: x[1], reverse=True)
-                        best_tester = suitable_testers[0][0]
+                            tester_tier = self.get_tester_tier_points(guild_id, tester)
+                            if tester_tier >= user_tier and tester_tier <= user_tier + 1:  # Same or one above (assuming points increase)
+                                seniority = self.get_tester_seniority(guild_id, tester)
+                                avg_review = self.get_tester_avg_review(guild_id, tester)
+                                score = (tester_tier - user_tier) * 10 + seniority * 2 + avg_review * 5  # Weighted score
+                                suitable_testers.append((tester, score))
                         
-                        # Assign
-                        cursor.execute("UPDATE queue SET tester_id = %s, status = 'assigned' WHERE user_id = %s AND guild_id = %s", (best_tester, user, guild_id))
-                        db.commit()
-                        
-                        guild = self.bot.get_guild(guild_id)
-                        user_obj = guild.get_member(user)
-                        tester_obj = guild.get_member(best_tester)
-                        if user_obj and tester_obj:
-                            await user_obj.send(f"You have been paired with tester {tester_obj.name}")
-                            await tester_obj.send(f"You have been assigned to test {user_obj.name}")
-                        
-                        available_testers.remove(best_tester)  # Remove from available for this round
+                        if suitable_testers:
+                            # Sort by score descending
+                            suitable_testers.sort(key=lambda x: x[1], reverse=True)
+                            best_tester = suitable_testers[0][0]
+                            
+                            # Assign
+                            cursor.execute("UPDATE queue SET tester_id = %s, status = 'assigned' WHERE user_id = %s AND guild_id = %s", (best_tester, user, guild_id))
+                            db.commit()
+                            
+                            guild = self.bot.get_guild(guild_id)
+                            user_obj = guild.get_member(user)
+                            tester_obj = guild.get_member(best_tester)
+                            if user_obj and tester_obj:
+                                await user_obj.send(f"You have been paired with tester {tester_obj.name}")
+                                await tester_obj.send(f"You have been assigned to test {user_obj.name}")
+                            
+                            available_testers.remove(best_tester)  # Remove from available for this round
 
-            elif num_testers == 1:
-                # Assign highest in queue
-                user = waiting_users[0]
-                tester = available_testers[0]
+                elif num_testers == 1:
+                    # Assign highest in queue
+                    user = waiting_users[0]
+                    tester = available_testers[0]
 
-                cursor.execute("UPDATE queue SET tester_id = %s, status = 'assigned' WHERE user_id = %s AND guild_id = %s", (tester, user, guild_id))
-                db.commit()
+                    cursor.execute("UPDATE queue SET tester_id = %s, status = 'assigned' WHERE user_id = %s AND guild_id = %s", (tester, user, guild_id))
+                    db.commit()
 
-                guild = self.bot.get_guild(guild_id)
-                user_obj = guild.get_member(user)
-                tester_obj = guild.get_member(tester)
-                if user_obj and tester_obj:
-                    await user_obj.send(f"You have been paired with tester {tester_obj.name}")
-                    await tester_obj.send(f"You have been assigned to test {user_obj.name}")
+                    guild = self.bot.get_guild(guild_id)
+                    user_obj = guild.get_member(user)
+                    tester_obj = guild.get_member(tester)
+                    if user_obj and tester_obj:
+                        await user_obj.send(f"You have been paired with tester {tester_obj.name}")
+                        await tester_obj.send(f"You have been assigned to test {user_obj.name}")
+        except Exception as e:
+            print(f"Error in queue_check: {e}")
 
     @app_commands.command(name="complete-test", description="Complete a test")
     @app_commands.describe(user="The user whose test is completed")
     async def complete_test(self, interaction: discord.Interaction, user: discord.Member):
-        # Check if tester
-        cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
-        if not cursor.fetchone():
-            await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
-            return
+        try:
+            # Check if tester
+            reconnect_db()
+            cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
+            if not cursor.fetchone():
+                await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
+                return
 
-        # Check if assigned to this user
-        cursor.execute("SELECT * FROM queue WHERE user_id = %s AND tester_id = %s AND guild_id = %s AND status = 'assigned'", (user.id, interaction.user.id, interaction.guild.id))
-        if not cursor.fetchone():
-            await interaction.response.send_message("You are not assigned to this user.", ephemeral=True)
-            return
+            # Check if assigned to this user
+            cursor.execute("SELECT * FROM queue WHERE user_id = %s AND tester_id = %s AND guild_id = %s AND status = 'assigned'", (user.id, interaction.user.id, interaction.guild.id))
+            if not cursor.fetchone():
+                await interaction.response.send_message("You are not assigned to this user.", ephemeral=True)
+                return
 
-        # Update status to completed
-        cursor.execute("UPDATE queue SET status = 'completed' WHERE user_id = %s AND tester_id = %s AND guild_id = %s", (user.id, interaction.user.id, interaction.guild.id))
-        db.commit()
+            # Update status to completed
+            cursor.execute("UPDATE queue SET status = 'completed' WHERE user_id = %s AND tester_id = %s AND guild_id = %s", (user.id, interaction.user.id, interaction.guild.id))
+            db.commit()
 
-        # Increment tester's completed tests
-        cursor.execute("UPDATE testers SET completed_tests = completed_tests + 1 WHERE user_id = %s AND guild_id = %s", (interaction.user.id, interaction.guild.id))
-        db.commit()
+            # Increment tester's completed tests
+            cursor.execute("UPDATE testers SET completed_tests = completed_tests + 1 WHERE user_id = %s AND guild_id = %s", (interaction.user.id, interaction.guild.id))
+            db.commit()
 
-        # Delete queue entry after completion
-        cursor.execute("DELETE FROM queue WHERE user_id = %s AND tester_id = %s AND guild_id = %s", (user.id, interaction.user.id, interaction.guild.id))
-        db.commit()
+            # Delete queue entry after completion
+            cursor.execute("DELETE FROM queue WHERE user_id = %s AND tester_id = %s AND guild_id = %s", (user.id, interaction.user.id, interaction.guild.id))
+            db.commit()
 
-        await interaction.response.send_message(f"Test completed for {user.mention}. They can now review you.")
+            await interaction.response.send_message(f"Test completed for {user.mention}. They can now review you.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error completing test: {e}", ephemeral=True)
 
     @app_commands.command(name="review", description="Review a tester")
     @app_commands.describe(tester="The tester to review", rating="Rating 1-5", comment="Optional comment")
     async def review(self, interaction: discord.Interaction, tester: discord.Member, rating: int, comment: str = ""):
-        if not 1 <= rating <= 5:
-            await interaction.response.send_message("Rating must be 1-5.", ephemeral=True)
-            return
+        try:
+            if not 1 <= rating <= 5:
+                await interaction.response.send_message("Rating must be 1-5.", ephemeral=True)
+                return
 
-        # Check if tester is approved
-        cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (tester.id, interaction.guild.id))
-        if not cursor.fetchone():
-            await interaction.response.send_message("Not a valid tester.", ephemeral=True)
-            return
+            # Check if tester is approved
+            reconnect_db()
+            cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (tester.id, interaction.guild.id))
+            if not cursor.fetchone():
+                await interaction.response.send_message("Not a valid tester.", ephemeral=True)
+                return
 
-        # Add review
-        cursor.execute("""
-            INSERT INTO reviews (guild_id, user_id, tester_id, rating, comment)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (interaction.guild.id, interaction.user.id, tester.id, rating, comment))
-        db.commit()
+            # Add review
+            cursor.execute("""
+                INSERT INTO reviews (guild_id, user_id, tester_id, rating, comment)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (interaction.guild.id, interaction.user.id, tester.id, rating, comment))
+            db.commit()
 
-        await interaction.response.send_message("Review submitted.", ephemeral=True)
+            await interaction.response.send_message("Review submitted.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"Error submitting review: {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Queue(bot))

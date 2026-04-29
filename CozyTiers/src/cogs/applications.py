@@ -134,78 +134,91 @@ class StandoutModal(Modal):
                 embed.add_field(name="Standout", value=standout, inline=False)
                 await channel.send(embed=embed)
 
+class ApplicationsApproveReject(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
     @app_commands.command(name="approve", description="Approve a tester application")
     @app_commands.describe(user_id="The user ID to approve")
     async def approve(self, interaction: discord.Interaction, user_id: str):
-        # Check permission
-        cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-        result = cursor.fetchone()
-        if not result or result[0] not in [role.id for role in interaction.user.roles]:
-            await interaction.response.send_message("You don't have permission.", ephemeral=True)
-            return
+        try:
+            # Check permission
+            reconnect_db()
+            cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
+            result = cursor.fetchone()
+            if not result or result[0] not in [role.id for role in interaction.user.roles]:
+                await interaction.response.send_message("You don't have permission.", ephemeral=True)
+                return
 
-        user_id = int(user_id)
+            user_id = int(user_id)
 
-        # Update status
-        cursor.execute("UPDATE testers SET status = 'approved', tester_tier = 'LT5' WHERE user_id = %s AND guild_id = %s", (user_id, interaction.guild.id))
-        db.commit()
+            # Update status
+            cursor.execute("UPDATE testers SET status = 'approved', tester_tier = 'LT5' WHERE user_id = %s AND guild_id = %s", (user_id, interaction.guild.id))
+            db.commit()
 
-        # Update json
-        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
-        testers_file = f"{server_folder}/testers.json"
-        if os.path.exists(testers_file):
-            with open(testers_file, "r") as f:
-                testers = json.load(f)
-            for tester in testers:
-                if tester["user_id"] == user_id:
-                    tester["status"] = "approved"
-                    tester["tester_tier"] = "LT5"
-                    tester["completed_tests"] = 0
-            with open(testers_file, "w") as f:
-                json.dump(testers, f, indent=4)
+            # Update json
+            server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
+            testers_file = f"{server_folder}/testers.json"
+            if os.path.exists(testers_file):
+                with open(testers_file, "r") as f:
+                    testers = json.load(f)
+                for tester in testers:
+                    if tester["user_id"] == user_id:
+                        tester["status"] = "approved"
+                        tester["tester_tier"] = "LT5"
+                        tester["completed_tests"] = 0
+                with open(testers_file, "w") as f:
+                    json.dump(testers, f, indent=4)
 
-        # DM user
-        user = self.bot.get_user(user_id)
-        if user:
-            await user.send("Your application has been approved! Here are the instructions: [instructions here]")
+            # DM user
+            user = self.bot.get_user(user_id)
+            if user:
+                await user.send("Your application has been approved! Here are the instructions: [instructions here]")
 
-        await interaction.response.send_message("Application approved.")
+            await interaction.response.send_message("Application approved.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error approving application: {e}", ephemeral=True)
 
     @app_commands.command(name="reject", description="Reject a tester application")
     @app_commands.describe(user_id="The user ID to reject", reason="The reason for rejection")
     async def reject(self, interaction: discord.Interaction, user_id: str, reason: str):
-        # Check permission
-        cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-        result = cursor.fetchone()
-        if not result or result[0] not in [role.id for role in interaction.user.roles]:
-            await interaction.response.send_message("You don't have permission.", ephemeral=True)
-            return
+        try:
+            # Check permission
+            reconnect_db()
+            cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
+            result = cursor.fetchone()
+            if not result or result[0] not in [role.id for role in interaction.user.roles]:
+                await interaction.response.send_message("You don't have permission.", ephemeral=True)
+                return
 
-        user_id = int(user_id)
+            user_id = int(user_id)
 
-        # Update status
-        cursor.execute("UPDATE testers SET status = 'rejected', reason = %s WHERE user_id = %s AND guild_id = %s", (reason, user_id, interaction.guild.id))
-        db.commit()
+            # Update status
+            cursor.execute("UPDATE testers SET status = 'rejected', reason = %s WHERE user_id = %s AND guild_id = %s", (reason, user_id, interaction.guild.id))
+            db.commit()
 
-        # Update json
-        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
-        testers_file = f"{server_folder}/testers.json"
-        if os.path.exists(testers_file):
-            with open(testers_file, "r") as f:
-                testers = json.load(f)
-            for tester in testers:
-                if tester["user_id"] == user_id:
-                    tester["status"] = "rejected"
-                    tester["reason"] = reason
-            with open(testers_file, "w") as f:
-                json.dump(testers, f, indent=4)
+            # Update json
+            server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
+            testers_file = f"{server_folder}/testers.json"
+            if os.path.exists(testers_file):
+                with open(testers_file, "r") as f:
+                    testers = json.load(f)
+                for tester in testers:
+                    if tester["user_id"] == user_id:
+                        tester["status"] = "rejected"
+                        tester["reason"] = reason
+                with open(testers_file, "w") as f:
+                    json.dump(testers, f, indent=4)
 
-        # DM user
-        user = self.bot.get_user(user_id)
-        if user:
-            await user.send(f"Your application has been rejected. Reason: {reason}. Thanks for being part of Cozy Tiers!")
+            # DM user
+            user = self.bot.get_user(user_id)
+            if user:
+                await user.send(f"Your application has been rejected. Reason: {reason}. Thanks for being part of Cozy Tiers!")
 
-        await interaction.response.send_message("Application rejected.")
+            await interaction.response.send_message("Application rejected.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error rejecting application: {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Applications(bot))
+    await bot.add_cog(ApplicationsApproveReject(bot))
