@@ -146,3 +146,6 @@ class Registration(commands.Cog):
                 json.dump(tier_roles, f, indent=4)
 
         await interaction.response.send_message(f"Points for {role.name} set to {points}.")
+
+async def setup(bot):
+    await bot.add_cog(Registration(bot))

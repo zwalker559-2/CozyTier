@@ -196,3 +196,6 @@ class StandoutModal(Modal):
             await user.send(f"Your application has been rejected. Reason: {reason}. Thanks for being part of Cozy Tiers!")
 
         await interaction.response.send_message("Application rejected.")
+
+async def setup(bot):
+    await bot.add_cog(Applications(bot))
