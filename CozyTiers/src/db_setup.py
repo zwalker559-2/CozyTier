@@ -92,7 +92,15 @@ CREATE TABLE IF NOT EXISTS queue (
 """)
 
 db.commit()
-cursor.close()
-db.close()
 
 print("Database setup complete.")
+
+# Function to close the database connection cleanly
+def close_db():
+    """Close the database connection when the bot shuts down"""
+    try:
+        cursor.close()
+        db.close()
+        print("Database connection closed.")
+    except Exception as e:
+        print(f"Error closing database: {e}")

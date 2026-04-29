@@ -1,8 +1,8 @@
 import discord
 from discord.ext import commands
-import mysql.connector
-from config import DISCORD_TOKEN, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DEBUG
+from config import DISCORD_TOKEN, DEBUG
 import db_setup
+from db_setup import close_db
 import os
 
 # Change working directory to the script's directory
@@ -13,15 +13,6 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='/', intents=intents)
-
-# Database connection
-db = mysql.connector.connect(
-    host=DB_HOST,
-    user=DB_USER,
-    password=DB_PASSWORD,
-    database=DB_NAME
-)
-cursor = db.cursor()
 
 @bot.event
 async def on_ready():
@@ -41,6 +32,11 @@ async def on_interaction(interaction: discord.Interaction):
         user = interaction.user
         guild = interaction.guild
         print(f"{user}({user.id}) executed {command_name} in {guild.name}({guild.id})")
+
+@bot.event
+async def on_close():
+    """Clean up when bot closes"""
+    close_db()
 
 # Load cogs
 async def load_cogs():
