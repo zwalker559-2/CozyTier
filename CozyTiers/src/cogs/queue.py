@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 import asyncio
-from db_setup import db, cursor
+from db_setup import db, cursor, reconnect_db
 
 class Queue(commands.Cog):
     def __init__(self, bot):
@@ -11,93 +11,123 @@ class Queue(commands.Cog):
 
     def get_user_tier_points(self, guild_id, user_id):
         # Get user's highest tier points
-        cursor.execute("""
-            SELECT tr.points FROM tiers t
-            JOIN tier_roles tr ON t.tier = tr.role_name AND t.guild_id = tr.guild_id
-            WHERE t.guild_id = %s AND t.user_id = %s
-            ORDER BY tr.points DESC LIMIT 1
-        """, (guild_id, user_id))
-        result = cursor.fetchone()
-        return result[0] if result else 0
+        try:
+            reconnect_db()
+            cursor.execute("""
+                SELECT tr.points FROM tiers t
+                JOIN tier_roles tr ON t.tier = tr.role_name AND t.guild_id = tr.guild_id
+                WHERE t.guild_id = %s AND t.user_id = %s
+                ORDER BY tr.points DESC LIMIT 1
+            """, (guild_id, user_id))
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting user tier points: {e}")
+            return 0
 
     def get_tester_tier_points(self, guild_id, tester_id):
-        cursor.execute("SELECT tester_tier FROM testers WHERE guild_id = %s AND user_id = %s", (guild_id, tester_id))
-        result = cursor.fetchone()
-        if result:
-            tier_name = result[0]
-            cursor.execute("SELECT points FROM tier_roles WHERE guild_id = %s AND role_name = %s", (guild_id, tier_name))
-            res = cursor.fetchone()
-            return res[0] if res else 0
-        return 0
+        try:
+            reconnect_db()
+            cursor.execute("SELECT tester_tier FROM testers WHERE guild_id = %s AND user_id = %s", (guild_id, tester_id))
+            result = cursor.fetchone()
+            if result:
+                tier_name = result[0]
+                cursor.execute("SELECT points FROM tier_roles WHERE guild_id = %s AND role_name = %s", (guild_id, tier_name))
+                res = cursor.fetchone()
+                return res[0] if res else 0
+            return 0
+        except Exception as e:
+            print(f"Error getting tester tier points: {e}")
+            return 0
 
     def get_tester_seniority(self, guild_id, tester_id):
-        cursor.execute("SELECT completed_tests FROM testers WHERE guild_id = %s AND user_id = %s", (guild_id, tester_id))
-        result = cursor.fetchone()
-        return result[0] if result else 0
+        try:
+            reconnect_db()
+            cursor.execute("SELECT completed_tests FROM testers WHERE guild_id = %s AND user_id = %s", (guild_id, tester_id))
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting tester seniority: {e}")
+            return 0
 
     def get_tester_avg_review(self, guild_id, tester_id):
-        cursor.execute("SELECT AVG(rating) FROM reviews WHERE guild_id = %s AND tester_id = %s", (guild_id, tester_id))
-        result = cursor.fetchone()
-        return result[0] if result and result[0] else 0
+        try:
+            reconnect_db()
+            cursor.execute("SELECT AVG(rating) FROM reviews WHERE guild_id = %s AND tester_id = %s", (guild_id, tester_id))
+            result = cursor.fetchone()
+            return result[0] if result and result[0] else 0
+        except Exception as e:
+            print(f"Error getting tester avg review: {e}")
+            return 0
 
     @app_commands.command(name="join-queue", description="Join the testing queue")
     async def join_queue(self, interaction: discord.Interaction):
         # Check if already in queue
-        cursor.execute("SELECT * FROM queue WHERE user_id = %s AND guild_id = %s AND status = 'waiting'", (interaction.user.id, interaction.guild.id))
-        if cursor.fetchone():
-            await interaction.response.send_message("You are already in the queue.", ephemeral=True)
-            return
+        try:
+            reconnect_db()
+            cursor.execute("SELECT * FROM queue WHERE user_id = %s AND guild_id = %s AND status = 'waiting'", (interaction.user.id, interaction.guild.id))
+            if cursor.fetchone():
+                await interaction.response.send_message("You are already in the queue.", ephemeral=True)
+                return
 
-        # Add to queue
-        cursor.execute("""
-            INSERT INTO queue (guild_id, user_id, status)
-            VALUES (%s, %s, 'waiting')
-        """, (interaction.guild.id, interaction.user.id))
-        db.commit()
+            # Add to queue
+            cursor.execute("""
+                INSERT INTO queue (guild_id, user_id, status)
+                VALUES (%s, %s, 'waiting')
+            """, (interaction.guild.id, interaction.user.id))
+            db.commit()
 
-        await interaction.response.send_message("Joined the queue.")
+            await interaction.response.send_message("Joined the queue.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error joining queue: {e}", ephemeral=True)
 
     @app_commands.command(name="available", description="Mark as available tester")
     async def available(self, interaction: discord.Interaction):
         # Check if tester
-        cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
-        if not cursor.fetchone():
-            await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
-            return
+        try:
+            reconnect_db()
+            cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
+            if not cursor.fetchone():
+                await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
+                return
 
-        # Mark as available (perhaps a separate table or field)
-        # For simplicity, assume testers are always available or add a field
-        await interaction.response.send_message("Marked as available.")
+            # Mark as available (perhaps a separate table or field)
+            # For simplicity, assume testers are always available or add a field
+            await interaction.response.send_message("Marked as available.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error marking as available: {e}", ephemeral=True)
 
     @tasks.loop(seconds=60)  # Check every minute
     async def queue_check(self):
         # Get all guilds
-        cursor.execute("SELECT guild_id FROM servers")
-        guilds = cursor.fetchall()
+        try:
+            reconnect_db()
+            cursor.execute("SELECT guild_id FROM servers")
+            guilds = cursor.fetchall()
 
-        for (guild_id,) in guilds:
-            # Get waiting users
-            cursor.execute("SELECT user_id FROM queue WHERE guild_id = %s AND status = 'waiting' ORDER BY id", (guild_id,))
-            waiting_users = [row[0] for row in cursor.fetchall()]
+            for (guild_id,) in guilds:
+                # Get waiting users
+                cursor.execute("SELECT user_id FROM queue WHERE guild_id = %s AND status = 'waiting' ORDER BY id", (guild_id,))
+                waiting_users = [row[0] for row in cursor.fetchall()]
 
-            # Get available testers
-            # Assume all approved testers are available for now
-            cursor.execute("SELECT user_id FROM testers WHERE guild_id = %s AND status = 'approved'", (guild_id,))
-            available_testers = [row[0] for row in cursor.fetchall()]
+                # Get available testers
+                # Assume all approved testers are available for now
+                cursor.execute("SELECT user_id FROM testers WHERE guild_id = %s AND status = 'approved'", (guild_id,))
+                available_testers = [row[0] for row in cursor.fetchall()]
 
-            if not waiting_users or not available_testers:
-                continue
+                if not waiting_users or not available_testers:
+                    continue
 
-            num_testers = len(available_testers)
+                num_testers = len(available_testers)
 
-            if num_testers >= 3:
-                # Advanced pairing logic
-                for user in waiting_users[:num_testers]:  # Pair up to number of testers
-                    user_tier = self.get_user_tier_points(guild_id, user)
-                    
-                    # Find suitable testers: same tier or one above
-                    suitable_testers = []
-                    for tester in available_testers:
+                if num_testers >= 3:
+                    # Advanced pairing logic
+                    for user in waiting_users[:num_testers]:  # Pair up to number of testers
+                        user_tier = self.get_user_tier_points(guild_id, user)
+                        
+                        # Find suitable testers: same tier or one above
+                        suitable_testers = []
+                        for tester in available_testers:
                         tester_tier = self.get_tester_tier_points(guild_id, tester)
                         if tester_tier >= user_tier and tester_tier <= user_tier + 1:  # Same or one above (assuming points increase)
                             seniority = self.get_tester_seniority(guild_id, tester)

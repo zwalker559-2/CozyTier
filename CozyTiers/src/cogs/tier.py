@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import os
-from db_setup import db, cursor
+from db_setup import db, cursor, reconnect_db
 
 class Tier(commands.Cog):
     def __init__(self, bot):
@@ -13,33 +13,39 @@ class Tier(commands.Cog):
     @app_commands.describe(user="The user to set tier for", tier="The tier to assign")
     async def tier_set(self, interaction: discord.Interaction, user: discord.Member, tier: str):
         # Check if tester
-        cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
-        if not cursor.fetchone():
-            await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
+        try:
+            reconnect_db()
+            cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s AND status = 'approved'", (interaction.user.id, interaction.guild.id))
+            if not cursor.fetchone():
+                await interaction.response.send_message("You are not an approved tester.", ephemeral=True)
+                return
+
+            # Get tier role
+            cursor.execute("SELECT role_id FROM tier_roles WHERE guild_id = %s AND role_name = %s", (interaction.guild.id, tier))
+            result = cursor.fetchone()
+            if not result:
+                await interaction.response.send_message("Tier not found.", ephemeral=True)
+                return
+
+            role_id = result[0]
+            role = interaction.guild.get_role(role_id)
+            if not role:
+                await interaction.response.send_message("Role not found.", ephemeral=True)
+                return
+
+            # Assign role
+            await user.add_roles(role)
+
+            # Save to DB
+            reconnect_db()
+            cursor.execute("""
+                INSERT INTO tiers (guild_id, user_id, tier, role_id)
+                VALUES (%s, %s, %s, %s)
+            """, (interaction.guild.id, user.id, tier, role_id))
+            db.commit()
+        except Exception as e:
+            await interaction.response.send_message(f"Error setting tier: {e}", ephemeral=True)
             return
-
-        # Get tier role
-        cursor.execute("SELECT role_id FROM tier_roles WHERE guild_id = %s AND role_name = %s", (interaction.guild.id, tier))
-        result = cursor.fetchone()
-        if not result:
-            await interaction.response.send_message("Tier not found.", ephemeral=True)
-            return
-
-        role_id = result[0]
-        role = interaction.guild.get_role(role_id)
-        if not role:
-            await interaction.response.send_message("Role not found.", ephemeral=True)
-            return
-
-        # Assign role
-        await user.add_roles(role)
-
-        # Save to DB
-        cursor.execute("""
-            INSERT INTO tiers (guild_id, user_id, tier, role_id)
-            VALUES (%s, %s, %s, %s)
-        """, (interaction.guild.id, user.id, tier, role_id))
-        db.commit()
 
         # Save to tier.json
         server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))

@@ -5,7 +5,7 @@ from discord.ui import Button, View, Modal, TextInput
 import json
 import os
 import asyncio
-from db_setup import db, cursor
+from db_setup import db, cursor, reconnect_db
 
 class Applications(commands.Cog):
     def __init__(self, bot):
@@ -14,9 +14,14 @@ class Applications(commands.Cog):
     @app_commands.command(name="apply", description="Apply to become a tester")
     async def apply(self, interaction: discord.Interaction):
         # Check if already applied
-        cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s", (interaction.user.id, interaction.guild.id))
-        if cursor.fetchone():
-            await interaction.response.send_message("You have already applied.", ephemeral=True)
+        try:
+            reconnect_db()
+            cursor.execute("SELECT * FROM testers WHERE user_id = %s AND guild_id = %s", (interaction.user.id, interaction.guild.id))
+            if cursor.fetchone():
+                await interaction.response.send_message("You have already applied.", ephemeral=True)
+                return
+        except Exception as e:
+            await interaction.response.send_message(f"Error checking application: {e}", ephemeral=True)
             return
 
         # Start DM application
@@ -86,11 +91,16 @@ class StandoutModal(Modal):
         standout = self.standout_input.value
 
         # Save application
-        cursor.execute("""
-            INSERT INTO testers (guild_id, user_id, region, standout, status)
-            VALUES (%s, %s, %s, %s, 'pending')
-        """, (self.guild_id, self.user_id, self.region, standout))
-        db.commit()
+        try:
+            reconnect_db()
+            cursor.execute("""
+                INSERT INTO testers (guild_id, user_id, region, standout, status)
+                VALUES (%s, %s, %s, %s, 'pending')
+            """, (self.guild_id, self.user_id, self.region, standout))
+            db.commit()
+        except Exception as e:
+            await interaction.response.send_message(f"Error saving application: {e}", ephemeral=True)
+            return
 
         # Log in server
         server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(self.guild_id))

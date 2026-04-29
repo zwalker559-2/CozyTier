@@ -4,7 +4,7 @@ from discord.ext import commands
 import json
 import os
 import asyncio
-from db_setup import db, cursor
+from db_setup import db, cursor, reconnect_db
 
 class Registration(commands.Cog):
     def __init__(self, bot):
@@ -22,6 +22,7 @@ class Registration(commands.Cog):
         
         # Check if already registered
         try:
+            reconnect_db()
             cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
             if cursor.fetchone():
                 await interaction.followup.send("This server is already registered.", ephemeral=True)
@@ -75,6 +76,7 @@ class Registration(commands.Cog):
 
         # Save to DB
         try:
+            reconnect_db()
             cursor.execute("""
                 INSERT INTO servers (guild_id, guild_name, guild_icon, owner_id, listing_name, listings_logo, app_logs_channel, tier_staff_role)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -121,6 +123,7 @@ class Registration(commands.Cog):
 
             # Save to DB with default points
             try:
+                reconnect_db()
                 cursor.execute("""
                     INSERT INTO tier_roles (guild_id, role_name, role_id, points)
                     VALUES (%s, %s, %s, %s)

@@ -95,6 +95,22 @@ db.commit()
 
 print("Database setup complete.")
 
+def reconnect_db():
+    """Reconnect to the database if connection is lost"""
+    global db, cursor
+    try:
+        if not db.is_connected():
+            db = mysql.connector.connect(
+                host=DB_HOST,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                database=DB_NAME
+            )
+            cursor = db.cursor()
+    except Exception as e:
+        print(f"Error reconnecting to database: {e}")
+        raise
+
 # Function to close the database connection cleanly
 def close_db():
     """Close the database connection when the bot shuts down"""
