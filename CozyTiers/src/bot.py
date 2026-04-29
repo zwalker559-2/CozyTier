@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import mysql.connector
-from config import DISCORD_TOKEN, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+from config import DISCORD_TOKEN, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DEBUG
 import db_setup
 import os
 
@@ -25,8 +25,22 @@ cursor = db.cursor()
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    print("-=-=-=-=-=-=-=-=-=-")
+    print(f"Bot Name: {bot.user.name}")
+    print(f"User ID: {bot.user.id}")
+    print(f"Servers: {len(bot.guilds)}")
+    print(f"Commands: {len(bot.tree.get_commands())}")
+    print(f"Debug: {'ON' if DEBUG else 'OFF'}")
+    print("-=-=-=-=-=-=-=-=-=-")
     await bot.tree.sync()  # Sync slash commands
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if DEBUG and interaction.type == discord.InteractionType.application_command:
+        command_name = interaction.command.name if hasattr(interaction, 'command') else 'Unknown'
+        user = interaction.user
+        guild = interaction.guild
+        print(f"{user}({user.id}) executed {command_name} in {guild.name}({guild.id})")
 
 # Load cogs
 async def load_cogs():

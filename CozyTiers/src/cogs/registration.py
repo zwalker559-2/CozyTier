@@ -15,43 +15,42 @@ class Registration(commands.Cog):
         # Send immediate response to prevent timeout
         await interaction.response.defer()
         
+        # Check if already registered
+        cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
+        if cursor.fetchone():
+            await interaction.followup.send("This server is already registered.", ephemeral=True)
+            return
+
+        # Start registration process
+        await interaction.followup.send("Starting server registration. Please provide the following information:")
+
+        # Ask for Listing Name
+        await interaction.followup.send("What is the listing name for this server?")
+        
+        def check(m):
+            return m.author == interaction.user and m.channel == interaction.channel
+
         try:
-            # Check if already registered
-            cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-            if cursor.fetchone():
-                await interaction.followup.send("This server is already registered.", ephemeral=True)
-                return
+            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+            listing_name = msg.content
+        except asyncio.TimeoutError:
+            await interaction.followup.send("Registration timed out.")
+            return
 
-            # Start registration process
-            await interaction.followup.send("Starting server registration. Please provide the following information:")
+        # Ask for Listings Logo
+        await interaction.followup.send("What is the listings logo URL?")
+        try:
+            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+            listings_logo = msg.content
+        except asyncio.TimeoutError:
+            await interaction.followup.send("Registration timed out.")
+            return
 
-            # Ask for Listing Name
-            await interaction.followup.send("What is the listing name for this server?")
-            
-            def check(m):
-                return m.author == interaction.user and m.channel == interaction.channel
-
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-                listing_name = msg.content
-            except asyncio.TimeoutError:
-                await interaction.followup.send("Registration timed out.")
-                return
-
-            # Ask for Listings Logo
-            await interaction.followup.send("What is the listings logo URL?")
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-                listings_logo = msg.content
-            except asyncio.TimeoutError:
-                await interaction.followup.send("Registration timed out.")
-                return
-
-            # Ask for Channel ID for Application Logs
-            await interaction.followup.send("What is the channel ID for application logs?")
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-                app_logs_channel = int(msg.content)
+        # Ask for Channel ID for Application Logs
+        await interaction.followup.send("What is the channel ID for application logs?")
+        try:
+            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+            app_logs_channel = int(msg.content)
         except (asyncio.TimeoutError, ValueError):
             await interaction.followup.send("Invalid channel ID or timed out.")
             return
@@ -122,11 +121,6 @@ class Registration(commands.Cog):
                 json.dump(tier_roles, f, indent=4)
 
         await interaction.followup.send("Default tier roles created. Use /set-points to assign point values.")
-
-    @app_commands.command(name="set-points", description="Set points for a tier role")
-    @app_commands.describe(role="The role to set points for", points="The points value")
-    async def set_points(self, interaction: discord.Interaction, role: discord.Role, points: int):
-        # Check permission
         cursor.execute("SELECT tier_staff_role FROM servers WHERE guild_id = %s", (interaction.guild.id,))
         result = cursor.fetchone()
         if not result or result[0] not in [r.id for r in interaction.user.roles]:
