@@ -12,42 +12,46 @@ class Registration(commands.Cog):
 
     @app_commands.command(name="register", description="Register the server for CozyTier")
     async def register(self, interaction: discord.Interaction):
-        # Check if already registered
-        cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-        if cursor.fetchone():
-            await interaction.response.send_message("This server is already registered.", ephemeral=True)
-            return
-
-        # Start registration process
-        await interaction.response.send_message("Starting server registration. Please provide the following information:")
-
-        # Ask for Listing Name
-        await interaction.followup.send("What is the listing name for this server?")
+        # Send immediate response to prevent timeout
+        await interaction.response.defer()
         
-        def check(m):
-            return m.author == interaction.user and m.channel == interaction.channel
-
         try:
-            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-            listing_name = msg.content
-        except asyncio.TimeoutError:
-            await interaction.followup.send("Registration timed out.")
-            return
+            # Check if already registered
+            cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
+            if cursor.fetchone():
+                await interaction.followup.send("This server is already registered.", ephemeral=True)
+                return
 
-        # Ask for Listings Logo
-        await interaction.followup.send("What is the listings logo URL?")
-        try:
-            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-            listings_logo = msg.content
-        except asyncio.TimeoutError:
-            await interaction.followup.send("Registration timed out.")
-            return
+            # Start registration process
+            await interaction.followup.send("Starting server registration. Please provide the following information:")
 
-        # Ask for Channel ID for Application Logs
-        await interaction.followup.send("What is the channel ID for application logs?")
-        try:
-            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-            app_logs_channel = int(msg.content)
+            # Ask for Listing Name
+            await interaction.followup.send("What is the listing name for this server?")
+            
+            def check(m):
+                return m.author == interaction.user and m.channel == interaction.channel
+
+            try:
+                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+                listing_name = msg.content
+            except asyncio.TimeoutError:
+                await interaction.followup.send("Registration timed out.")
+                return
+
+            # Ask for Listings Logo
+            await interaction.followup.send("What is the listings logo URL?")
+            try:
+                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+                listings_logo = msg.content
+            except asyncio.TimeoutError:
+                await interaction.followup.send("Registration timed out.")
+                return
+
+            # Ask for Channel ID for Application Logs
+            await interaction.followup.send("What is the channel ID for application logs?")
+            try:
+                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+                app_logs_channel = int(msg.content)
         except (asyncio.TimeoutError, ValueError):
             await interaction.followup.send("Invalid channel ID or timed out.")
             return
