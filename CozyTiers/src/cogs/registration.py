@@ -4,7 +4,7 @@ from discord.ext import commands
 import json
 import os
 import asyncio
-from config import db, cursor
+from db_setup import db, cursor
 
 class Registration(commands.Cog):
     def __init__(self, bot):
@@ -69,7 +69,7 @@ class Registration(commands.Cog):
         db.commit()
 
         # Create server folder
-        server_folder = f"src/data/{interaction.guild.id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
         os.makedirs(server_folder, exist_ok=True)
 
         # Save to servers.json
@@ -90,7 +90,8 @@ class Registration(commands.Cog):
 
         # Create default tier roles
         roles = ["LT5", "LT4", "LT3", "LT2", "LT1", "HT5", "HT4", "HT3", "HT2", "HT1"]
-        poini, role_name in enumerate(roles):
+        points = [0] * len(roles)
+        for i, role_name in enumerate(roles):
             role = await interaction.guild.create_role(name=role_name, color=discord.Color.blue())
             # Save to DB with default points
             cursor.execute("""
@@ -110,8 +111,7 @@ class Registration(commands.Cog):
             tier_roles.append({
                 "role_name": role_name,
                 "role_id": role.id,
-                "points": points[i]role.id,
-                "points": 0
+                "points": points[i]
             })
 
             with open(tier_roles_file, "w") as f:
@@ -134,7 +134,7 @@ class Registration(commands.Cog):
         db.commit()
 
         # Update json
-        server_folder = f"src/data/{interaction.guild.id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
         tier_roles_file = f"{server_folder}/tier-roles.json"
         if os.path.exists(tier_roles_file):
             with open(tier_roles_file, "r") as f:

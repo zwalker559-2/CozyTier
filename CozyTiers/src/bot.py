@@ -2,6 +2,11 @@ import discord
 from discord.ext import commands
 import mysql.connector
 from config import DISCORD_TOKEN, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+import db_setup
+import os
+
+# Change working directory to the script's directory
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 intents = discord.Intents.default()
 intents.members = True

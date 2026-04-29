@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import os
-from config import db, cursor
+from db_setup import db, cursor
 
 class Tier(commands.Cog):
     def __init__(self, bot):
@@ -42,7 +42,7 @@ class Tier(commands.Cog):
         db.commit()
 
         # Save to tier.json
-        server_folder = f"src/data/{interaction.guild.id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
         os.makedirs(server_folder, exist_ok=True)
         tier_file = f"{server_folder}/tier.json"
         if os.path.exists(tier_file):

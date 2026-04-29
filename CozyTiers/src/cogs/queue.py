@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 import asyncio
-from config import db, cursor
+from db_setup import db, cursor
 
 class Queue(commands.Cog):
     def __init__(self, bot):

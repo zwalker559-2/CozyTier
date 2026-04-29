@@ -5,7 +5,7 @@ from discord.ui import Button, View, Modal, TextInput
 import json
 import os
 import asyncio
-from config import db, cursor
+from db_setup import db, cursor
 
 class Applications(commands.Cog):
     def __init__(self, bot):
@@ -93,7 +93,7 @@ class StandoutModal(Modal):
         db.commit()
 
         # Log in server
-        server_folder = f"src/data/{self.guild_id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(self.guild_id))
         os.makedirs(server_folder, exist_ok=True)
         testers_file = f"{server_folder}/testers.json"
         if os.path.exists(testers_file):
@@ -141,7 +141,7 @@ class StandoutModal(Modal):
         db.commit()
 
         # Update json
-        server_folder = f"src/data/{interaction.guild.id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
         testers_file = f"{server_folder}/testers.json"
         if os.path.exists(testers_file):
             with open(testers_file, "r") as f:
@@ -178,7 +178,7 @@ class StandoutModal(Modal):
         db.commit()
 
         # Update json
-        server_folder = f"src/data/{interaction.guild.id}"
+        server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
         testers_file = f"{server_folder}/testers.json"
         if os.path.exists(testers_file):
             with open(testers_file, "r") as f:
