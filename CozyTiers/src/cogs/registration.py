@@ -12,13 +12,22 @@ class Registration(commands.Cog):
 
     @app_commands.command(name="register", description="Register the server for CozyTier")
     async def register(self, interaction: discord.Interaction):
+        # Check permissions: only server owner or administrators
+        if not interaction.user.guild_permissions.administrator and interaction.user.id != interaction.guild.owner.id:
+            await interaction.response.send_message("You don't have permission to register this server. Only administrators or the server owner can do this.", ephemeral=True)
+            return
+
         # Send immediate response to prevent timeout
         await interaction.response.defer()
         
         # Check if already registered
-        cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
-        if cursor.fetchone():
-            await interaction.followup.send("This server is already registered.", ephemeral=True)
+        try:
+            cursor.execute("SELECT * FROM servers WHERE guild_id = %s", (interaction.guild.id,))
+            if cursor.fetchone():
+                await interaction.followup.send("This server is already registered.", ephemeral=True)
+                return
+        except Exception as e:
+            await interaction.followup.send(f"Database error: {e}", ephemeral=True)
             return
 
         # Start registration process
@@ -65,11 +74,15 @@ class Registration(commands.Cog):
             return
 
         # Save to DB
-        cursor.execute("""
-            INSERT INTO servers (guild_id, guild_name, guild_icon, owner_id, listing_name, listings_logo, app_logs_channel, tier_staff_role)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (interaction.guild.id, interaction.guild.name, interaction.guild.icon.url if interaction.guild.icon else None, interaction.guild.owner.id, listing_name, listings_logo, app_logs_channel, tier_staff_role))
-        db.commit()
+        try:
+            cursor.execute("""
+                INSERT INTO servers (guild_id, guild_name, guild_icon, owner_id, listing_name, listings_logo, app_logs_channel, tier_staff_role)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (interaction.guild.id, interaction.guild.name, interaction.guild.icon.url if interaction.guild.icon else None, interaction.guild.owner.id, listing_name, listings_logo, app_logs_channel, tier_staff_role))
+            db.commit()
+        except Exception as e:
+            await interaction.followup.send(f"Failed to save to database: {e}", ephemeral=True)
+            return
 
         # Create server folder
         server_folder = os.path.join(os.path.dirname(__file__), '..', 'data', str(interaction.guild.id))
@@ -86,30 +99,36 @@ class Registration(commands.Cog):
             "app_logs_channel": app_logs_channel,
             "tier_staff_role": tier_staff_role
         }
-        with open(f"{server_folder}/servers.json", "w") as f:
-            json.dump(server_data, f, indent=4)
+        try:
+            with open(f"{server_folder}/servers.json", "w") as f:
+                json.dump(server_data, f, indent=4)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to save server data: {e}", ephemeral=True)
+            return
 
         await interaction.followup.send("Server registered successfully!")
 
         # Create default tier roles
         roles = ["LT5", "LT4", "LT3", "LT2", "LT1", "HT5", "HT4", "HT3", "HT2", "HT1"]
         points = [0] * len(roles)
+        tier_roles = []
         for i, role_name in enumerate(roles):
-            role = await interaction.guild.create_role(name=role_name, color=discord.Color.blue())
-            # Save to DB with default points
-            cursor.execute("""
-                INSERT INTO tier_roles (guild_id, role_name, role_id, points)
-                VALUES (%s, %s, %s, %s)
-            """, (interaction.guild.id, role_name, role.id, points[i]))
-            db.commit()
+            try:
+                role = await interaction.guild.create_role(name=role_name, color=discord.Color.blue())
+            except Exception as e:
+                await interaction.followup.send(f"Failed to create role {role_name}: {e}", ephemeral=True)
+                continue
 
-            # Save to json
-            tier_roles_file = f"{server_folder}/tier-roles.json"
-            if os.path.exists(tier_roles_file):
-                with open(tier_roles_file, "r") as f:
-                    tier_roles = json.load(f)
-            else:
-                tier_roles = []
+            # Save to DB with default points
+            try:
+                cursor.execute("""
+                    INSERT INTO tier_roles (guild_id, role_name, role_id, points)
+                    VALUES (%s, %s, %s, %s)
+                """, (interaction.guild.id, role_name, role.id, points[i]))
+                db.commit()
+            except Exception as e:
+                await interaction.followup.send(f"Failed to save role {role_name} to database: {e}", ephemeral=True)
+                continue
 
             tier_roles.append({
                 "role_name": role_name,
@@ -117,8 +136,14 @@ class Registration(commands.Cog):
                 "points": points[i]
             })
 
+        # Save to json
+        tier_roles_file = f"{server_folder}/tier-roles.json"
+        try:
             with open(tier_roles_file, "w") as f:
                 json.dump(tier_roles, f, indent=4)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to save tier roles: {e}", ephemeral=True)
+            return
 
         await interaction.followup.send("Default tier roles created. Use /set-points to assign point values.")
 
