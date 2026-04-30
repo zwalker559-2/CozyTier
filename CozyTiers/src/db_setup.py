@@ -22,9 +22,15 @@ CREATE TABLE IF NOT EXISTS servers (
     listing_name VARCHAR(255),
     listings_logo VARCHAR(255),
     app_logs_channel BIGINT,
-    tier_staff_role BIGINT
+    tier_staff_role BIGINT,
+    application_staff_role BIGINT,
+    queue_channel_id BIGINT
 )
 """)
+
+# Add missing server columns if upgrading existing schema
+cursor.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS application_staff_role BIGINT NULL")
+cursor.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS queue_channel_id BIGINT NULL")
 
 # Testers table
 cursor.execute("""
